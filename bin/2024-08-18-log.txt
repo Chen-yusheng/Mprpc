@@ -1,0 +1,3 @@
+20:31:19 =>[info] service_name:FriendServiceRpc
+20:31:19 =>[info] method name:GetFriendList
+20:31:19 =>[info] Rpcprovide start service at ip:127.0.0.1 port:8000

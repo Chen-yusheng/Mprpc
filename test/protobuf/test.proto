@@ -1,0 +1,57 @@
+syntax = "proto3";   //声明protobuf的版本
+
+package chenysh;  //声明代码所在的包 (相对于C++中的namespace)
+
+//定义下面的选项生成service类和rpc方法描述，默认不生成
+option cc_generic_services = true;
+
+message ResultCode
+{
+    int32 errcode = 1;
+    bytes errmsg = 2;
+}
+
+//定义登录请求消息类型
+message LoginRequest
+{
+    bytes name = 1;  //1表示是第一个字段
+    bytes pwd = 2;
+    map<int32,string> test= 3;
+}
+
+//定义登录响应消息类型
+message LoginResponse
+{
+    ResultCode result = 1;
+    bool success = 2;
+}
+
+message GetFriendListsRequest
+{
+    uint32 userid = 1;
+}
+
+message User
+{
+    bytes name = 1;
+    uint32 age = 2;
+    enum Sex    //定义枚举类型，从0开始
+    {
+        MAN = 0;
+        WOMAN = 1;
+    }
+    Sex sex = 3;
+}
+
+message GetFriendListsResponse
+{
+    ResultCode result = 1;
+    repeated User friend_list = 2;  //定义了一个列表类型
+}
+
+//在protobuf中定义描述rpc方法的类型
+service UserServiceRpc
+{
+    rpc Login(LoginRequest) returns(LoginResponse);
+    rpc GetFriendLists(GetFriendListsRequest) returns(GetFriendListsResponse);
+} 
