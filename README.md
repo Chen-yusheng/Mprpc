@@ -40,15 +40,32 @@
 
 
 
+## RPC
 ### 什么是rpc
-RPC（Remote Procedure Call Protocol）远程过程调用协议。一个通俗的描述是：客户端在不知道调用细节的情况下，调用存在于远程计算机上的某个服务对象，就像调用本地应用程序中的对象一样。
+RPC(Remote Procedure Call Protocol)远程过程调用协议。一个通俗的描述是：客户端在不知道调用细节的情况下，调用存在于远程计算机上的某个服务对象，就像调用本地应用程序中的对象一样。
 比较正式的描述是：一种通过网络从远程计算机程序上请求服务，而不需要了解底层网络技术的协议。
 
+
+
+### RPC通信原理
+![alt text](./pics/image-1.png)
+1. 服务消费方(client)调用以本地调用方式调用服务；
+2. client stub接收到调用后负责将方法、参数等组装成能够进行网络传输的消息体；
+3. client stub找到服务地址，并将消息发送到服务端；
+4. server stub收到消息后进行解码；
+5. server stub根据解码结果调用本地的服务；
+6. 本地服务(server端)执行并将结果返回给server stub；
+7. server stub将返回结果打包成消息并发送至消费方；
+8. client stub接收到消息，并进行解码；
+9. 服务消费方得到最终结果。
+
+RPC的目标就是要2~8这些步骤都封装起来，让用户对这些细节透明。通过动态代理模式，在执行该方法的前后对数据进行封装和解码等，让用于感觉就像是直接调用该方法一样，殊不知，我们对方法前后都经过了复杂的处理。
 
 
 
 ## 文件架构及使用方式
 项目代码文件目录结构：
+```
 |--bin      存放可执行文件
 |--build    cmake构建的中间文件
 |--example  存放框架使用示例代码
@@ -58,6 +75,7 @@ RPC（Remote Procedure Call Protocol）远程过程调用协议。一个通俗�
 |--test     示例代码
 |--autobuild.sh  一键编译
 |--CMakeLists.txt  Cmake顶层目录配置文件
+```
 
 使用方式：用户可以通过运行autobuild.sh脚本一键编译项目文件，也可以通过如下步骤编译项目：
 1. 进入buil目录
@@ -74,16 +92,99 @@ RPC（Remote Procedure Call Protocol）远程过程调用协议。一个通俗�
 
 
 
-
 ## 中间件选型
 ### Protobuf
 #### Protobuf的作用
+本项目使用Protobuf定义消息数据结构和定义通信协议，并对消息进行序列化和反序列化。定义了请求和响应的消息格式，以及其他需要传输的数据。protobuf自动生成的代码帮助我们将结构化数据序列化为二进制格式，从而在网洛上传输。使我们能够跨不同编程语言实现的节点进行数据传递，保证数据的一致性和高效性。
+框架定义的RpcHeader如下：
+```
+syntax = "proto3";  //定义proto所用的语法
+
+package mprpc; 
+
+//开启生成通用服务代码的选项
+option cc_generic_services = true;  
+
+message RpcHeader
+{
+    bytes service_name = 1;  //服务名，类名
+    bytes method_name = 2;   //方法名，调用的函数名
+    uint32 args_size = 3;    //参数序列化后的长度
+}
+```
+用户可通过如下示例定义自己的消息体：
+```
+syntax = "proto3";
+package mprpc;
+option cc_generic_services = true;
+
+//定义错误消息状态
+message ResultCode 
+{
+    int32 errcode = 1;   //值为0表示没有错误
+    bytes errmsg = 2;
+}
+
+message GetFriendListRequest
+{
+    uint32 userid = 1;
+}
+
+message GetFriendListResponse
+{
+    ResultCode result = 1;
+    repeated bytes friends = 2;  //repeated表明返回的是一个数组
+}
+
+//定义RPC服务
+service FriendServiceRpc
+{
+    rpc GetFriendList(GetFriendListRequest) returns(GetFriendListResponse);
+}
+```
 
 
-#### Protobuf相较于Json、xml的优缺点
+
+#### Protobuf相较于Json的优缺点
+Protobuf和JSON都可以数据序列化和反序列化，但它们在许多方面有着显著的不同。以下是对两者的一些主要比较：
+* 数据大小和速度：
+Protobuf：由于Protobuf传输的是二进制格式，因此它生成的数据通常比JSON小很多，这使得Protobuf在网络传输中更加高效。同时，Protobuf的解析和序列化速度也比JSON快。
+JSON：JSON是文本格式，它生成的数据通常比Protobuf大，且解析和序列化速度较慢。
+* 可读性和易用性：
+Protobuf：Protobuf是二进制格式，人类无法直接阅读。此外，使用Protobuf需要预先定义数据结构(.proto 文件)，这增加了使用的复杂性。
+JSON：JSON是文本格式，人类可以直接阅读和编辑。此外，JSON的数据结构可以在运行时动态定义，这使得JSON更易于使用。
+* 类型安全和版本兼容性：
+Protobuf：Protobuf支持静态类型检查，这可以在编译时捕获类型错误。此外，Protobuf设计了一套版本兼容性机制，可以在不破坏旧版本的情况下添加新的字段。
+JSON：JSON是动态类型的，无法在编译时捕获类型错误。此外，JSON没有内置的版本兼容性机制，如果数据结构发生变化，可能需要修改代码以适应新的结构。
+* 支持的语言：
+Protobuf：Google提供了多种语言的Protobuf库，包括C++、Java、Python、Golang等。
+JSON：几乎所有的编程语言都支持JSON。
+* 学习成本：
+Protobuf：Protobuf的学习曲线相对较陡。你需要理解Protobuf的语法，学习如何编写.proto 文件，并且需要了解如何使用Protobuf编译器生成代码。此外，你还需要理解Protobuf的版本兼容性规则。
+JSON：JSON的学习曲线相对较平。JSON的语法非常简单，大多数人可以在很短的时间内掌握。此外，几乎所有的编程语言都内置了JSON的支持，你不需要安装任何额外的库就可以开始使用JSON。
+* 使用成本：
+Protobuf：Protobuf的使用成本相对较高。首先，你需要为每个数据结构编写一个.proto 文件，然后使用Protobuf编译器生成代码。此外，如果你的数据结构发生了变化，你需要更新.proto文件并重新生成代码。这些步骤都需要额外的时间和工作。
+JSON：JSON的使用成本相对较低。你可以直接在代码中定义数据结构，无需任何额外的步骤。此外，如果你的数据结构发生了变化，你只需要更新你的代码，无需任何其他操作。
+
+总的来说，Protobuf和JSON各有优劣，适用于不同的场景。如果你需要高效的数据传输和严格的类型检查，那么Protobuf可能是一个好选择。如果你需要易于使用和人类可读的数据格式，那么JSON可能更适合你。
 
 
-#### 
 
 
 ### Zookeeper
+#### Zookeeper是为了解决什么问题
+假设，系统中存在几十个、甚至上百个服务时，我们可能都无法明确系统中到底有哪些服务正在运行。而且由于自动扩容、服务重启等因素，服务实例的运行时状态也会经常变化。如下图所示：
+![alt text](./pics/image-3.png)
+一般来说，为了实现高效的服务治理，需要引入注册中心来管理服务的实例。
+注册中心是服务实例信息的存储仓库，也是服务提供者和服务消费者进行交互的桥梁。它主要提供了服务注册和服务发现这两大核心功能。
+
+
+
+#### Zookeeper上RPC服务注册/发现过程：
+![alt text](./pics/image-2.png)
+1. 服务提供者启动时，会将其服务名称，ip地址注册到配置中心。
+2. 服务消费者在第一次调用服务时，会通过注册中心找到相应的服务的IP地址列表，并缓存到本地，以供后续使用。当消费者调用服务时，不会再去请求注册中心，而是直接通过负载均衡算法从IP列表中取一个服务提供者的服务器调用服务。
+3. 当服务提供者的某台服务器宕机或下线时，相应的ip会从服务提供者IP列表中移除。同时，注册中心会将新的服务IP地址列表发送给服务消费者机器，缓存在消费者本机。
+4. 当某个服务的所有服务器都下线了，那么这个服务也就下线了。
+5. 同样，当服务提供者的某台服务器上线时，注册中心会将新的服务IP地址列表发送给服务消费者机器，缓存在消费者本机。
+6. 服务提供方可以根据服务消费者的数量来作为服务下线的依据。

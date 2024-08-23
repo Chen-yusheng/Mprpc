@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package mprpc;
 
-option cc_generic_services = true;
-
+#开启生成通用服务代码的选项
+option cc_generic_services = true; 
 
 message RpcHeader
 {
